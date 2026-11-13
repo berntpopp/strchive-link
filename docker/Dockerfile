@@ -1,0 +1,154 @@
+# syntax=docker/dockerfile:1
+# Multi-stage Dockerfile for strchive-link.
+
+# Base image pinned by digest (manifest-list) for byte-reproducible rebuilds —
+# Container & Deployment Hardening Standard v1, rule 2. Bump via Renovate/Dependabot.
+FROM python:3.14-slim@sha256:0741d101873c12ab927e6f8653feb8862b9bd58771177acb1b885b95141f91b4 AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV VIRTUAL_ENV="/opt/venv" \
+    PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /home/app/web
+COPY uv.lock pyproject.toml README.md ./
+
+# Pin the build installer by copying uv from a digest-pinned image instead of an
+# unbounded floating installer upgrade, so build tooling cannot drift outside the
+# lockfile/base-image digest — Container & Deployment Hardening Standard v1
+# (F-19). Bump via Renovate/Dependabot.
+COPY --from=ghcr.io/astral-sh/uv:0.8.7@sha256:1e26f9a868360eeb32500a35e05787ffff3402f01a8dc8168ef6aee44aef0aab /uv /usr/local/bin/uv
+RUN uv sync --frozen --no-dev --active --no-install-project
+
+
+FROM python:3.14-slim@sha256:0741d101873c12ab927e6f8653feb8862b9bd58771177acb1b885b95141f91b4 AS prepared
+
+
+# Public release identity. Release automation supplies all three values from the
+# validated source tag/commit and build record; defaults identify a local build.
+ARG APP_VERSION=0.0.0
+ARG VCS_REF=0000000000000000000000000000000000000000
+ARG BUILD_DATE=1970-01-01T00:00:00Z
+LABEL org.opencontainers.image.title="STRchive-Link" \
+      org.opencontainers.image.description="FastAPI and MCP server for STRchive tandem-repeat disease loci" \
+      org.opencontainers.image.source="https://github.com/berntpopp/strchive-link" \
+      org.opencontainers.image.url="https://github.com/berntpopp/strchive-link" \
+      org.opencontainers.image.documentation="https://github.com/berntpopp/strchive-link#readme" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="GeneFoundry" \
+      org.genefoundry.research-use-only="true" \
+      org.genefoundry.data-policy="code-only"
+ENV VCS_REF="${VCS_REF}" \
+    STRCHIVE_LINK_GIT_SHA="${VCS_REF}" \
+    STRCHIVE_LINK_BUILT_AT="${BUILD_DATE}"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH="/home/app/web" \
+    STRCHIVE_LINK_HOST=0.0.0.0 \
+    STRCHIVE_LINK_PORT=8000 \
+    STRCHIVE_LINK_TRANSPORT=unified \
+    STRCHIVE_LINK_MCP_PATH=/mcp \
+    TMPDIR=/tmp
+
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+RUN groupadd --system --gid 10001 app && \
+    useradd --system --uid 10001 --gid app --home /home/app --create-home app && \
+    mkdir -p /tmp && \
+    chown -R app:app /tmp /home/app
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR /home/app/web
+
+COPY --chown=app:app ./strchive_link ./strchive_link
+COPY --chown=app:app ./server.py ./mcp_server.py ./pyproject.toml ./README.md ./
+
+RUN /opt/venv/bin/pip install . --no-deps
+
+RUN rm -rf /root/.cache/pip \
+           /usr/local/lib/python*/ensurepip \
+           /usr/local/lib/python*/site-packages/pip \
+           /usr/local/lib/python*/site-packages/pip-*.dist-info \
+           /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.* \
+           /opt/venv/lib/python*/site-packages/pip \
+           /opt/venv/lib/python*/site-packages/pip-*.dist-info \
+           /opt/venv/bin/pip /opt/venv/bin/pip3 /opt/venv/bin/pip3.* \
+    && find / -xdev -type d -name __pycache__ -prune -exec rm -rf '{}' + \
+    && find / -xdev -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+RUN find / -xdev -perm /6000 -exec chmod a-s '{}' + \
+    && test -z "$(find / -xdev -perm /6000 -print -quit)"
+RUN actual="$(find / -xdev -type f -links +1 -printf '%i %p\n' | sort -k2,2)" \
+    && expected="$(printf '%s %s\n%s %s\n' \
+         "$(stat -c '%i' /usr/bin/perl)" /usr/bin/perl \
+         "$(stat -c '%i' /usr/bin/perl5.40.1)" /usr/bin/perl5.40.1 | sort -k2,2)" \
+    && { test "$actual" = "$expected" || { printf 'unexpected hardlinks:\n%s\n' "$actual"; exit 1; }; } \
+    && rm -f /usr/bin/perl5.40.1
+
+FROM scratch AS production
+COPY --from=prepared / /
+
+ARG APP_VERSION=0.0.0
+ARG VCS_REF=0000000000000000000000000000000000000000
+ARG BUILD_DATE=1970-01-01T00:00:00Z
+LABEL org.opencontainers.image.title="STRchive-Link" \
+      org.opencontainers.image.description="FastAPI and MCP server for STRchive tandem-repeat disease loci" \
+      org.opencontainers.image.source="https://github.com/berntpopp/strchive-link" \
+      org.opencontainers.image.url="https://github.com/berntpopp/strchive-link" \
+      org.opencontainers.image.documentation="https://github.com/berntpopp/strchive-link#readme" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="GeneFoundry" \
+      org.genefoundry.research-use-only="true" \
+      org.genefoundry.data-policy="code-only"
+ENV VCS_REF="${VCS_REF}" \
+    STRCHIVE_LINK_GIT_SHA="${VCS_REF}" \
+    STRCHIVE_LINK_BUILT_AT="${BUILD_DATE}"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH="/home/app/web" \
+    STRCHIVE_LINK_HOST=0.0.0.0 \
+    STRCHIVE_LINK_PORT=8000 \
+    STRCHIVE_LINK_TRANSPORT=unified \
+    STRCHIVE_LINK_MCP_PATH=/mcp \
+    TMPDIR=/tmp
+WORKDIR /home/app/web
+
+USER 10001:10001
+
+EXPOSE 8000
+
+# Stateless: the pinned STRchive snapshot (~526 KB) is fetched and digest-verified
+# into memory at startup; no volume, nothing written outside the /tmp tmpfs.
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=30s \
+    CMD curl -f http://127.0.0.1:8000/health || exit 1
+
+ENTRYPOINT ["python", "server.py"]
+CMD ["--transport", "unified", "--host", "0.0.0.0", "--port", "8000"]

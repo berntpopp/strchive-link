@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Format, lint, typecheck, tests, and coverage (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Single version: the interpreter the container ships (docker/Dockerfile).
+        python-version: ["3.14"]
+
+    # uv resolves its interpreter from `.python-version` before PATH, so the matrix
+    # alone would not reliably move it. UV_PYTHON makes each leg run the interpreter
+    # it is named after by statement rather than by PATH accident.
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          version: "0.8.7"
+
+      - name: Install dependencies
+        run: uv sync --group dev --frozen
+
+      # Static checks + a single parallel test run (xdist). Fast feedback on every PR.
+      - name: Run CI checks (format, lint, typecheck, tests)
+        run: make ci-local
+
+      # Coverage gate runs only on push to main to avoid a second full test run on
+      # every PR iteration (concurrency-cancel + this split are the compute savers).
+      - name: Coverage gate
+        if: github.event_name == 'push' && matrix.python-version == '3.14'
+        run: make test-cov

@@ -1,0 +1,59 @@
+# Production overlay for strchive-link (Container & Deployment Hardening Standard v1).
+#
+#   STRCHIVE_LINK_IMAGE=ghcr.io/berntpopp/strchive-link@sha256:<digest> \
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml up -d
+
+services:
+  strchive-link:
+    build: !reset null
+    image: ${STRCHIVE_LINK_IMAGE:?Set STRCHIVE_LINK_IMAGE to ghcr.io/berntpopp/strchive-link@sha256:<digest>}
+    pull_policy: missing
+    container_name: !reset null
+    env_file: !reset []
+    ports: !reset []
+    expose:
+      - "8000"
+    environment:
+      GF_HEALTHCHECK_HOST: localhost
+      STRCHIVE_LINK_HOST: 0.0.0.0
+      STRCHIVE_LINK_PORT: 8000
+      STRCHIVE_LINK_TRANSPORT: unified
+      STRCHIVE_LINK_MCP_PATH: /mcp
+      STRCHIVE_LINK_LOG_LEVEL: INFO
+      STRCHIVE_LINK_LOG_FORMAT: json
+      STRCHIVE_LINK_ALLOWED_HOSTS: '["localhost","127.0.0.1","::1","strchive-link.genefoundry.org"]'
+    read_only: true
+    tmpfs: !override
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    security_opt: !override
+      - no-new-privileges:true
+    cap_drop: !override
+      - ALL
+    init: true
+    restart: unless-stopped
+    mem_limit: !reset null
+    cpus: !reset null
+    pids_limit: !reset null
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+          pids: 256
+    healthcheck: !override
+      test: ["CMD", "sh", "-c", "curl -f -H \"Host: $${GF_HEALTHCHECK_HOST}\" http://localhost:8000/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        labels: "service=strchive-link,environment=production"
+    networks: !override
+      - default
+
+networks: !override
+  default:
+    name: strchive-link_default
