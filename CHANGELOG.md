@@ -6,6 +6,15 @@ All notable changes to strchive-link are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-13
+
+### Fixed
+
+- Container release: `container-release.json` now seals the pinned data identity
+  (`release_tag: strchive-<commit>`, `digest: sha256:<file digest>`) that the release
+  manifest requires for an `upstream-live` service. v0.1.0 published its image but its
+  evidence assembly failed closed, so no v0.1.0 GitHub Release exists; use 0.1.1.
+
 ## [0.1.0] - 2026-11-13
 
 ### Added

@@ -28,6 +28,8 @@
     "egress_allowlist": [
       "raw.githubusercontent.com"
     ],
+    "release_tag": "strchive-e964fa88df3b2189ee478cbd6eaad15bb28e3a0a",
+    "digest": "sha256:16301ecb00239f0e3c684913aefc2f48c6f5a7c2a481958aab4db55d282bca86",
     "reproducible_rollback": false
   },
   "definitions": {
