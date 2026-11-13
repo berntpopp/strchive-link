@@ -1,0 +1,70 @@
+name: strchive-link
+
+services:
+  strchive-link:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: production
+      args:
+        APP_VERSION: ${APP_VERSION:-0.0.0}
+        VCS_REF: ${VCS_REF:-0000000000000000000000000000000000000000}
+        BUILD_DATE: ${BUILD_DATE:-1970-01-01T00:00:00Z}
+    container_name: strchive-link
+    # Dev/local only — loopback-bound (127.0.0.1) so copying this file to a
+    # server never publishes the unauthenticated backend on the public IP.
+    # Production fronts the container with a reverse proxy via the prod/npm
+    # overlays (ports: !reset []). Backends are unauthenticated by design.
+    ports:
+      - "127.0.0.1:${STRCHIVE_LINK_HOST_PORT:-8000}:8000"
+    env_file:
+      - path: ../.env
+        required: false
+      - path: ../.env.docker
+        required: false
+    environment:
+      STRCHIVE_LINK_HOST: 0.0.0.0
+      STRCHIVE_LINK_PORT: 8000
+      STRCHIVE_LINK_TRANSPORT: unified
+      STRCHIVE_LINK_MCP_PATH: /mcp
+      STRCHIVE_LINK_ALLOWED_HOSTS: '["localhost","127.0.0.1","::1"]'
+      STRCHIVE_LINK_LOG_LEVEL: INFO
+      STRCHIVE_LINK_LOG_FORMAT: json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-H", "Host: localhost", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    # Container & Deployment Hardening Standard v1. Stateless: the pinned STRchive
+    # snapshot is held in memory, so the rootfs is read-only and the only writable
+    # path is a size-capped tmpfs (TMPDIR=/tmp in the image).
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    init: true
+    # Limits only as deploy.resources.limits (Compose v2); see the router's
+    # reference compose for why the legacy aliases are not set alongside them.
+    pids_limit: 256
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+          pids: 256
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - strchive-network
+
+networks:
+  strchive-network:
+    driver: bridge

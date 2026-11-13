@@ -1,0 +1,33 @@
+# CITATION.cff — GENERATED. Do not edit.
+# Source: genefoundry-router/fleet-metadata.yaml + this repo's pyproject.toml.
+# Regenerate: `make citation-write` in genefoundry-router.
+# See genefoundry-router/docs/REPO-METADATA-STANDARD-v1.md.
+cff-version: 1.2.0
+message: If you use this software, please cite it as below.
+title: strchive-link
+abstract: 'MCP server for STRchive: curated short-tandem-repeat (STR) disease loci with repeat-count ranges,
+  pathogenic motifs, interruptions and hg19/hg38/T2T coordinates from a pinned snapshot, for LLM agents.'
+type: software
+authors:
+- family-names: Popp
+  given-names: Bernt
+  email: bernt.popp@charite.de
+  affiliation: Charité – Universitätsmedizin Berlin
+version: 0.1.0
+license: MIT
+repository-code: https://github.com/berntpopp/strchive-link
+url: https://genefoundry.org
+keywords:
+- bioinformatics
+- claude
+- fastmcp
+- genefoundry
+- genetics
+- llm-tools
+- mcp
+- mcp-server
+- model-context-protocol
+- rare-disease
+- repeat-expansion
+- short-tandem-repeat
+- strchive
