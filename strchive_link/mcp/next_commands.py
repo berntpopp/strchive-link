@@ -36,6 +36,8 @@ def after_search(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [cmd("search_loci"), cmd("get_server_capabilities")]
 
 
-def after_locus(locus_id: str) -> list[dict[str, Any]]:
-    """After get_locus: compare an observed length (caller supplies repeat_count)."""
-    return [cmd("compare_repeat_length", locus=locus_id)]
+def after_locus(locus_id: str, gene: str, mode: str) -> list[dict[str, Any]]:
+    """After get_locus: the fenced source notes, else the gene's other loci (always executable)."""
+    if mode in ("minimal", "compact"):
+        return [cmd("get_locus", locus=locus_id, response_mode="standard")]
+    return [cmd("search_loci", query=gene)]

@@ -34,7 +34,7 @@ FORBIDDEN_CODEPOINTS = frozenset(
 _LOCUS_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/+?-]{0,63}$")
 _SYMBOL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
 _ALLOWED_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/@+-]{0,63}$")
-_ALLOWED_RANGE_RE = re.compile(r"^\d+\.\.\d+( items)?$")
+_ALLOWED_RANGE_RE = re.compile(r"^\d+\.\.\d+( items| chars)?$")
 
 
 def strip_forbidden(text: str) -> str:

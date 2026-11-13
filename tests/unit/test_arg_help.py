@@ -57,3 +57,19 @@ def test_describe_constraints_range() -> None:
 
 def test_describe_constraints_none_for_plain() -> None:
     assert describe_constraints({"type": "string"}) is None
+
+
+def test_float_for_int_names_the_type_not_the_range() -> None:
+    schema = {"type": "integer", "minimum": 0, "maximum": 1_000_000}
+    assert describe_constraints(schema, "int_from_float") == (
+        ["0..1000000"],
+        "must be an integer",
+    )
+
+
+def test_string_length_error_describes_the_length() -> None:
+    schema = {"type": "string", "minLength": 1, "maxLength": 64}
+    assert describe_constraints(schema, "string_too_short") == (
+        ["1..64 chars"],
+        "must be between 1 and 64 characters long",
+    )

@@ -184,6 +184,16 @@ def _hpo_haystack(locus: Locus) -> str:
     return _fold(" ".join(locus.hpo_terms or []))
 
 
+def _keys(locus: Locus) -> set[str]:
+    """Locus id, gene symbol and disease abbreviations, case-folded."""
+    return {_fold(locus.id), _fold(locus.gene), *map(_fold, locus.disease_codes)}
+
+
+def _prefix_pattern(folded: str) -> re.Pattern[str]:
+    """Pattern for an abbreviation then a non-letter: DM -> DM1, DM2; SCA -> SCA1."""
+    return re.compile(rf"^{re.escape(folded)}[^a-z]")
+
+
 _ID_QUERY = re.compile(r"^(MONDO|OMIM|MIM|ORPHA|ORPHANET)[:_ ]?(\d{1,12})$", re.IGNORECASE)
 _MOTIF_QUERY = re.compile(r"^[ACGTN]{2,100}$")
 
@@ -215,6 +225,10 @@ class Catalog:
         matches = self._by_alias.get(folded, [])
         if len(matches) == 1:
             return matches[0]
+        if not matches:
+            prefix = _prefix_pattern(folded)
+            prefixed = [loc for loc in self.loci if any(map(prefix.match, _keys(loc)))]
+            matches = prefixed if len(prefixed) > 1 else []
         if matches:
             raise AmbiguousQueryError(
                 "Several STRchive loci match; pick one locus id.",
@@ -227,7 +241,7 @@ class Catalog:
         return [locus for locus, _ in self.search_scored(query)]
 
     def search_scored(self, query: str | None) -> list[tuple[Locus, str]]:
-        """Rank loci by gene/id, MONDO/OMIM/Orphanet id, motif, disease text, HPO phenotype.
+        """Rank loci by gene/id, its prefix, MONDO/OMIM/Orphanet id, motif, disease text, HPO.
 
         Each hit carries the basis it matched on, so a phenotype-only hit is never
         mistaken for a locus whose disease is named after the query.
@@ -239,11 +253,14 @@ class Catalog:
         id_match = _ID_QUERY.match(text)
         motif = text.upper() if _MOTIF_QUERY.match(text.upper()) else None
         tokens = folded.split()
+        prefix = _prefix_pattern(folded)
         scored: list[tuple[int, Locus, str]] = []
         for locus in self.loci:
-            exact = {_fold(locus.id), _fold(locus.gene), *map(_fold, locus.disease_codes)}
+            exact = _keys(locus)
             if folded in exact:
                 scored.append((100, locus, "id_or_gene"))
+            elif any(prefix.match(key) for key in exact):
+                scored.append((70, locus, "id_prefix"))
             elif id_match is not None and _id_matches(locus, *id_match.groups()):
                 scored.append((90, locus, "external_id"))
             elif motif is not None and motif in locus.all_motifs():
