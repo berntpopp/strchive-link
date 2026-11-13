@@ -146,11 +146,10 @@ def project_locus(locus: Locus, mode: str) -> dict[str, Any]:
 
 def project_row(locus: Locus, mode: str, matched_on: str) -> dict[str, Any]:
     """One search hit at a response_mode (no prose at any mode)."""
-    row: dict[str, Any] = {"locus_id": locus.id, "gene": locus.gene}
+    row: dict[str, Any] = {"locus_id": locus.id, "gene": locus.gene, "matched_on": matched_on}
     if mode == "minimal":
         return row
     row.update(
-        matched_on=matched_on,
         disease_id=locus.disease_id,
         disease=locus.disease,
         inheritance=list(locus.inheritance),

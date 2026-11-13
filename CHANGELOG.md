@@ -6,6 +6,21 @@ All notable changes to strchive-link are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-13
+
+### Fixed
+
+- `search_loci`: an abbreviation followed by a type number now ranks first
+  (`matched_on: id_prefix`; e.g. `FRA` -> FRA2A, FRA7A, FRA12A) instead of being buried
+  under equal-score substring hits; minimal rows keep `matched_on`; the `response_mode`
+  description now states what search rows actually carry.
+- `get_locus` / `compare_repeat_length`: an abbreviation shared by several numbered
+  loci returns `ambiguous_query` with candidates instead of `not_found`.
+- `get_locus` `next_commands` no longer suggests `compare_repeat_length` without its
+  required `repeat_count`; every suggested step is executable as given.
+- Argument errors: a float for an integer says "must be an integer"; a too-short or
+  too-long string states the length bounds instead of listing parameter names.
+
 ## [0.1.1] - 2026-11-13
 
 ### Fixed

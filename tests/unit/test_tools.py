@@ -121,7 +121,7 @@ async def test_search_response_modes_differ(facade: Any, structured: Any) -> Non
         facade, structured, "search_loci", {"query": "CAG", "response_mode": "minimal"}
     )
     assert compact["results"] != full["results"]
-    assert minimal["results"] and set(minimal["results"][0]) == {"locus_id", "gene"}
+    assert minimal["results"] and set(minimal["results"][0]) == {"locus_id", "gene", "matched_on"}
 
 
 async def test_compare_htt_38(facade: Any, structured: Any) -> None:
@@ -178,3 +178,34 @@ async def test_search_rows_say_what_matched(facade: Any, structured: Any) -> Non
     assert basis["SCA3_ATXN3"] == "disease_name"
     assert basis["GDPAG_GLS"] == "hpo_phenotype"
     assert basis["EPM1_CSTB"] == "disease_tag"
+
+
+async def test_abbreviation_prefix_is_ambiguous_not_missing(facade: Any, structured: Any) -> None:
+    env = await _call(facade, structured, "get_locus", {"locus": "DM"})
+    assert env["error_code"] == "ambiguous_query"
+    assert {c["locus_id"] for c in env["candidates"]} == {"DM1_DMPK", "DM2_CNBP"}
+
+
+async def test_minimal_search_rows_keep_matched_on(facade: Any, structured: Any) -> None:
+    env = await _call(
+        facade, structured, "search_loci", {"query": "HTT", "response_mode": "minimal"}
+    )
+    assert env["results"][0]["matched_on"] == "id_or_gene"
+
+
+async def test_next_commands_carry_every_required_argument(facade: Any, structured: Any) -> None:
+    required = {t.name: set(t.parameters.get("required", [])) for t in await facade.list_tools()}
+    for name, args in [
+        ("get_locus", {"locus": "HTT"}),
+        ("get_locus", {"locus": "HTT", "response_mode": "full"}),
+        ("compare_repeat_length", {"locus": "HTT", "repeat_count": 38}),
+        ("search_loci", {"query": "HTT"}),
+    ]:
+        for step in (await _call(facade, structured, name, args))["_meta"]["next_commands"]:
+            assert required[step["tool"]] <= set(step["arguments"]), (name, step)
+
+
+async def test_documented_prefix_example_is_true(facade: Any, structured: Any) -> None:
+    env = await _call(facade, structured, "get_locus", {"locus": "FRA"})
+    assert env["error_code"] == "ambiguous_query"
+    assert {"FRA2A_AFF3", "FRA7A_ZNF713"} <= {c["locus_id"] for c in env["candidates"]}

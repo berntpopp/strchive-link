@@ -38,7 +38,8 @@ LocusKey = Annotated[
         max_length=64,
         description="STRchive locus id (e.g. HD_HTT), gene symbol (e.g. HTT), or the "
         "source's disease abbreviation (e.g. SCA3). Case-insensitive. A gene with several "
-        "loci (ARX, HOXA13) returns ambiguous_query with the locus ids to choose from.",
+        "loci (ARX, HOXA13), or an abbreviation shared by numbered types (FRA -> FRA2A, "
+        "FRA7A, ...), returns ambiguous_query with the locus ids to choose from.",
         examples=["HTT", "HD_HTT", "RFC1"],
     ),
 ]
@@ -73,7 +74,7 @@ def register_locus_tools(mcp: FastMCP) -> None:
         description=(
             "Search the STRchive catalog of tandem-repeat (STR) disease loci. query matches, "
             "in rank order: an exact locus id / gene symbol / disease abbreviation; an "
-            "abbreviation followed by a type number (SCA -> SCA1, SCA2, ...); a "
+            "abbreviation followed by a type number (FRA -> FRA2A, FRA7A, ...); a "
             "MONDO:/OMIM:/ORPHA: id; a repeat motif in either orientation (e.g. CAG, AAGGG); "
             "words in the disease name, then in source tags (e.g. 'ataxia'), then in the "
             "locus HPO phenotype labels. Each row's matched_on says which. Omit query to "
@@ -95,7 +96,15 @@ def register_locus_tools(mcp: FastMCP) -> None:
             int, Field(ge=1, le=MAX_SEARCH_LIMIT, description="Page size (1-100, default 20).")
         ] = 20,
         offset: Annotated[int, Field(ge=0, description="Rows to skip (default 0).")] = 0,
-        response_mode: ResponseMode = "compact",
+        response_mode: Annotated[
+            ResponseModeValue,
+            Field(
+                description="Row verbosity: minimal (locus_id, gene, matched_on) | compact "
+                "(default; + disease, inheritance, evidence, pathogenic motifs, pathogenic_min) "
+                "| standard (+ all repeat ranges, MONDO/OMIM ids) | full (+ coordinates, tags). "
+                "No source prose at any mode; use get_locus for notes."
+            ),
+        ] = "compact",
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
             hits = (await get_catalog()).search_scored(query)
@@ -144,7 +153,7 @@ def register_locus_tools(mcp: FastMCP) -> None:
             record = (await get_catalog()).get(locus)
             payload = {"result": project_locus(record, response_mode)}
             payload["range_semantics"] = RANGE_SEMANTICS
-            payload["_meta"] = {"next_commands": after_locus(record.id)}
+            payload["_meta"] = {"next_commands": after_locus(record.id, record.gene, response_mode)}
             return _provenance(payload)
 
         return await run_mcp_tool(
