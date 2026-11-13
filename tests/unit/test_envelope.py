@@ -1,0 +1,134 @@
+"""Tests for the MCP envelope boundary."""
+
+from __future__ import annotations
+
+import pytest
+
+from strchive_link.exceptions import (
+    AmbiguousQueryError,
+    DataUnavailableError,
+    InvalidInputError,
+    NotFoundError,
+)
+from strchive_link.mcp.envelope import McpErrorContext, McpToolError, _classify, run_mcp_tool
+
+
+@pytest.mark.parametrize(
+    ("exc", "code"),
+    [
+        (NotFoundError("x"), "not_found"),
+        (AmbiguousQueryError("x"), "ambiguous_query"),
+        (InvalidInputError("x"), "invalid_input"),
+        (DataUnavailableError("x"), "upstream_unavailable"),
+        (RuntimeError("boom"), "internal"),
+    ],
+)
+def test_classify(exc: Exception, code: str) -> None:
+    assert _classify(exc)[0] == code
+
+
+def _err_env(out: object) -> dict:
+    """Read the structured error envelope from a run_mcp_tool error result.
+
+    An error now returns a ToolResult(is_error=True) (Response-Envelope v1: isError is
+    REQUIRED); the machine-readable envelope rides in structured_content.
+    """
+    assert getattr(out, "is_error", None) is True, "error result must carry isError:true"
+    env = out.structured_content
+    assert isinstance(env, dict)
+    return env
+
+
+async def test_success_injects_meta() -> None:
+    async def call() -> dict[str, object]:
+        return {"locus_id": "HD_HTT"}
+
+    out = await run_mcp_tool("get_locus", call, context=McpErrorContext("get_locus"))
+    assert out["success"] is True
+    assert out["_meta"]["tool"] == "get_locus"
+    assert "request_id" in out["_meta"]
+
+
+async def test_lean_meta() -> None:
+    async def call() -> dict[str, object]:
+        return {"x": 1, "_meta": {"next_commands": []}}
+
+    out = await run_mcp_tool("t", call, context=McpErrorContext("t"))
+    assert set(out["_meta"]) <= {
+        "tool",
+        "request_id",
+        "elapsed_ms",
+        "next_commands",
+        "unsafe_for_clinical_use",
+    }
+
+
+async def test_error_is_returned_not_raised() -> None:
+    async def call() -> dict[str, object]:
+        raise NotFoundError("nope")
+
+    out = await run_mcp_tool(
+        "get_locus", call, context=McpErrorContext("get_locus", arguments={"query": "X"})
+    )
+    env = _err_env(out)
+    assert env["success"] is False
+    assert env["error_code"] == "not_found"
+    assert env["recovery_action"] == "reformulate_input"
+    assert env["_meta"]["next_commands"]  # always present
+
+
+async def test_invalid_input_carries_field_allowed_hint() -> None:
+    async def call() -> dict[str, object]:
+        raise InvalidInputError("bad", field="source", allowed=["a", "b"], hint="use a")
+
+    out = await run_mcp_tool("search_loci", call, context=McpErrorContext("search_loci"))
+    env = _err_env(out)
+    assert env["field"] == "source"
+    assert env["allowed_values"] == ["a", "b"]
+    # hint is a FIXED server string (the exception's own hint is never surfaced --
+    # it could carry copied prose); field + allowed_values carry the detail.
+    assert env["hint"] and "use a" not in env["hint"]
+
+
+async def test_ambiguous_envelope_lists_candidates() -> None:
+    async def call() -> dict[str, object]:
+        raise AmbiguousQueryError("ambig", candidates=[{"locus_id": "A_X"}, {"locus_id": "B_X"}])
+
+    out = await run_mcp_tool("get_locus", call, context=McpErrorContext("get_locus"))
+    env = _err_env(out)
+    assert env["error_code"] == "ambiguous_query"
+    assert len(env["candidates"]) == 2
+    assert env["_meta"]["next_commands"][0]["tool"] == "get_locus"
+
+
+async def test_mcp_tool_error_propagates_code() -> None:
+    async def call() -> dict[str, object]:
+        raise McpToolError(error_code="rate_limited", message="slow down")
+
+    out = await run_mcp_tool("t", call, context=McpErrorContext("t"))
+    env = _err_env(out)
+    assert env["error_code"] == "rate_limited"
+    assert env["retryable"] is True
+
+
+async def test_mcp_tool_error_code_is_clamped_to_the_enum() -> None:
+    """An off-enum McpToolError code is clamped to `internal` (review #7)."""
+    exc = McpToolError(error_code="data_unavailable", message="x")  # type: ignore[arg-type]
+    assert exc.error_code == "internal"
+
+    async def call() -> dict[str, object]:
+        raise exc
+
+    out = await run_mcp_tool("t", call, context=McpErrorContext("t"))
+    assert _err_env(out)["error_code"] == "internal"
+
+
+async def test_returned_error_dict_sets_is_error() -> None:
+    """A tool body that RETURNS success:false must still flag isError (review #6)."""
+
+    async def call() -> dict[str, object]:
+        return {"success": False, "error_code": "not_found", "message": "no"}
+
+    out = await run_mcp_tool("t", call, context=McpErrorContext("t"))
+    assert out.is_error is True
+    assert out.structured_content["error_code"] == "not_found"
