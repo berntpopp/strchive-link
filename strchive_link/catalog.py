@@ -169,11 +169,19 @@ def _fold(text: str) -> str:
     return unicodedata.normalize("NFC", text).casefold()
 
 
-def _haystack(locus: Locus) -> str:
-    """Searchable text: names, identifiers, and tags (underscores read as spaces)."""
-    parts = [locus.disease, locus.disease_id, locus.gene, locus.id]
-    parts += [tag.replace("_", " ") for tag in (*locus.disease_tags, *locus.locus_tags)]
-    return _fold(" ".join(parts))
+def _name_haystack(locus: Locus) -> str:
+    """Disease name and identifiers."""
+    return _fold(" ".join([locus.disease, locus.disease_id, locus.gene, locus.id]))
+
+
+def _tag_haystack(locus: Locus) -> str:
+    """Source disease/locus tags (underscores read as spaces)."""
+    return _fold(" ".join(t.replace("_", " ") for t in (*locus.disease_tags, *locus.locus_tags)))
+
+
+def _hpo_haystack(locus: Locus) -> str:
+    """HPO phenotype labels (search only; labels are not echoed in responses)."""
+    return _fold(" ".join(locus.hpo_terms or []))
 
 
 _ID_QUERY = re.compile(r"^(MONDO|OMIM|MIM|ORPHA|ORPHANET)[:_ ]?(\d{1,12})$", re.IGNORECASE)
@@ -215,30 +223,41 @@ class Catalog:
         raise NotFoundError()
 
     def search(self, query: str | None) -> list[Locus]:
-        """Rank loci matching a gene, id, MONDO/OMIM/Orphanet id, motif, or disease text."""
+        """Ranked loci for a query (see ``search_scored``)."""
+        return [locus for locus, _ in self.search_scored(query)]
+
+    def search_scored(self, query: str | None) -> list[tuple[Locus, str]]:
+        """Rank loci by gene/id, MONDO/OMIM/Orphanet id, motif, disease text, HPO phenotype.
+
+        Each hit carries the basis it matched on, so a phenotype-only hit is never
+        mistaken for a locus whose disease is named after the query.
+        """
         if query is None or not query.strip():
-            return sorted(self.loci, key=lambda loc: (loc.gene, loc.id))
+            return [(loc, "all") for loc in sorted(self.loci, key=lambda loc: (loc.gene, loc.id))]
         text = query.strip()
         folded = _fold(text)
-        scored: list[tuple[int, Locus]] = []
         id_match = _ID_QUERY.match(text)
         motif = text.upper() if _MOTIF_QUERY.match(text.upper()) else None
         tokens = folded.split()
+        scored: list[tuple[int, Locus, str]] = []
         for locus in self.loci:
-            score = 0
             exact = {_fold(locus.id), _fold(locus.gene), *map(_fold, locus.disease_codes)}
             if folded in exact:
-                score = 100
+                scored.append((100, locus, "id_or_gene"))
             elif id_match is not None and _id_matches(locus, *id_match.groups()):
-                score = 90
+                scored.append((90, locus, "external_id"))
             elif motif is not None and motif in locus.all_motifs():
-                score = 80
-            elif all(token in _haystack(locus) for token in tokens):
-                score = 10
-            if score:
-                scored.append((score, locus))
+                scored.append((80, locus, "motif"))
+            elif all(token in _name_haystack(locus) for token in tokens):
+                scored.append((20, locus, "disease_name"))
+            elif all(
+                token in f"{_name_haystack(locus)} {_tag_haystack(locus)}" for token in tokens
+            ):
+                scored.append((10, locus, "disease_tag"))
+            elif all(token in _hpo_haystack(locus) for token in tokens):
+                scored.append((5, locus, "hpo_phenotype"))
         scored.sort(key=lambda item: (-item[0], item[1].gene, item[1].id))
-        return [locus for _, locus in scored]
+        return [(locus, basis) for _, locus, basis in scored]
 
 
 def _id_matches(locus: Locus, prefix: str, number: str) -> bool:

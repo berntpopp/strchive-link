@@ -182,3 +182,13 @@ async def test_fetch_oversize_is_rejected() -> None:
     respx.get(SOURCE_URL).mock(return_value=httpx.Response(200, content=FIXTURE.read_bytes()))
     with pytest.raises(DataUnavailableError):
         await fetch_catalog(SOURCE_URL, PINNED_SHA256, timeout=5, max_bytes=1024)
+
+
+def test_search_hpo_phenotype_ranks_after_name_and_tag_matches(catalog: Catalog) -> None:
+    hits = catalog.search_scored("ataxia")
+    ids = [locus.id for locus, _ in hits]
+    assert "GDPAG_GLS" in ids  # ataxia only in its HPO phenotype labels
+    basis = {locus.id: why for locus, why in hits}
+    assert basis["SCA3_ATXN3"] == "disease_name"
+    assert basis["GDPAG_GLS"] == "hpo_phenotype"
+    assert ids.index("SCA3_ATXN3") < ids.index("GDPAG_GLS")

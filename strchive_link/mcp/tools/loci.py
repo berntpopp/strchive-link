@@ -17,7 +17,7 @@ from strchive_link.mcp.annotations import READ_ONLY_OPEN_WORLD
 from strchive_link.mcp.envelope import McpErrorContext, run_mcp_tool
 from strchive_link.mcp.next_commands import after_locus, after_search, cmd
 from strchive_link.mcp.service_adapters import get_catalog
-from strchive_link.mcp.shaping import ResponseModeValue, project_locus, project_row
+from strchive_link.mcp.shaping import ResponseModeValue, fenced, project_locus, project_row
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -46,7 +46,8 @@ LocusKey = Annotated[
 COMPARE_INTERPRETATION = (
     "Descriptive only: lists which STRchive-stated ranges contain this repeat count. "
     "It is not a diagnosis or a pathogenicity classification; ranges come from the "
-    "literature and may overlap or be missing."
+    "literature and may overlap or be missing. The three categories can merge "
+    "sub-ranges (e.g. reduced penetrance, premutation) that source_range_notes describes."
 )
 
 
@@ -73,7 +74,8 @@ def register_locus_tools(mcp: FastMCP) -> None:
             "Search the STRchive catalog of tandem-repeat (STR) disease loci. query matches, "
             "in rank order: an exact locus id / gene symbol / disease abbreviation; a "
             "MONDO:/OMIM:/ORPHA: id; a repeat motif in either orientation (e.g. CAG, AAGGG); "
-            "or words in the disease name and source tags (e.g. 'ataxia'). Omit query to "
+            "words in the disease name, then in source tags (e.g. 'ataxia'), then in the "
+            "locus HPO phenotype labels. Each row's matched_on says which. Omit query to "
             "list every locus. Returns results with total/truncated/next_offset. "
             "Signature: search_loci(query=, limit=, offset=, response_mode=)."
         ),
@@ -95,8 +97,10 @@ def register_locus_tools(mcp: FastMCP) -> None:
         response_mode: ResponseMode = "compact",
     ) -> dict[str, Any]:
         async def call() -> dict[str, Any]:
-            hits = (await get_catalog()).search(query)
-            page = [project_row(locus, response_mode) for locus in hits[offset : offset + limit]]
+            hits = (await get_catalog()).search_scored(query)
+            page = [
+                project_row(loc, response_mode, why) for loc, why in hits[offset : offset + limit]
+            ]
             more = offset + len(page) < len(hits)
             return _provenance(
                 {
@@ -179,6 +183,9 @@ def register_locus_tools(mcp: FastMCP) -> None:
             result = compare_length(record, repeat_count)
             result["unit"] = "repeat_units"
             result["interpretation"] = COMPARE_INTERPRETATION
+            notes = fenced(record, "details")
+            if notes is not None:
+                result["source_range_notes"] = notes
             next_step = [cmd("get_locus", locus=record.id, response_mode="standard")]
             payload = {"result": result, "_meta": {"next_commands": next_step}}
             return _provenance(payload)

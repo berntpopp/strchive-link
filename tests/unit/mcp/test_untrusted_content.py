@@ -85,6 +85,7 @@ async def test_hostile_source_prose_is_fenced_on_the_wire(
         compact = structured(  # type: ignore[operator]
             await mcp.call_tool("get_locus", {"locus": "HTT"})
         )
-        assert "IGNORE" not in json.dumps(compact)
+        assert compact["result"]["details"]["kind"] == "untrusted_text"
+        assert "disease_description" not in compact["result"]
     finally:
         set_catalog(None)

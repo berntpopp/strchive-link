@@ -67,7 +67,7 @@ async def test_free_text_is_fenced_at_standard(facade: Any, structured: Any) -> 
 async def test_compact_carries_no_unfenced_prose(facade: Any, structured: Any) -> None:
     result = (await _call(facade, structured, "get_locus", {"locus": "HTT"}))["result"]
     assert "disease_description" not in result
-    assert "details" not in result
+    assert result["details"]["kind"] == "untrusted_text"
 
 
 async def test_get_locus_ambiguous_gene_lists_candidates(facade: Any, structured: Any) -> None:
@@ -155,3 +155,26 @@ async def test_capabilities_summary_lists_tools_and_license(facade: Any, structu
     assert set(env["tools"]) == EXPECTED_TOOLS
     assert "CC BY 4.0" in env["license"]
     json.dumps(env)
+
+
+async def test_compact_locus_carries_fenced_range_details(facade: Any, structured: Any) -> None:
+    result = (await _call(facade, structured, "get_locus", {"locus": "FMR1"}))["result"]
+    assert result["details"]["kind"] == "untrusted_text"
+    assert "disease_description" not in result
+
+
+async def test_compare_surfaces_fenced_source_range_notes(facade: Any, structured: Any) -> None:
+    env = await _call(
+        facade, structured, "compare_repeat_length", {"locus": "HTT", "repeat_count": 38}
+    )
+    notes = env["result"]["source_range_notes"]
+    assert notes["kind"] == "untrusted_text"
+    assert notes["provenance"]["record_id"] == "HD_HTT#details"
+
+
+async def test_search_rows_say_what_matched(facade: Any, structured: Any) -> None:
+    env = await _call(facade, structured, "search_loci", {"query": "ataxia", "limit": 100})
+    basis = {row["locus_id"]: row["matched_on"] for row in env["results"]}
+    assert basis["SCA3_ATXN3"] == "disease_name"
+    assert basis["GDPAG_GLS"] == "hpo_phenotype"
+    assert basis["EPM1_CSTB"] == "disease_tag"
