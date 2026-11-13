@@ -81,6 +81,7 @@ def did_you_mean(unknown: str, valid: Iterable[str]) -> str | None:
 _TYPE_ERROR_PHRASE: dict[str, str] = {
     "int_parsing": "must be an integer",
     "int_type": "must be an integer",
+    "int_from_float": "must be an integer",
     "float_parsing": "must be a number",
     "float_type": "must be a number",
     "bool_parsing": "must be true or false",
@@ -138,6 +139,18 @@ def describe_constraints(
         lo_s = str(int(min_items)) if min_items is not None else "0"
         hi_s = str(int(max_items)) if max_items is not None else "?"
         return _finish([f"{lo_s}..{hi_s} items"], f"must have between {lo_s} and {hi_s} items")
+    min_len = next(
+        (n["minLength"] for n in nodes if isinstance(n, Mapping) and "minLength" in n), None
+    )
+    max_len = next(
+        (n["maxLength"] for n in nodes if isinstance(n, Mapping) and "maxLength" in n), None
+    )
+    if min_len is not None or max_len is not None:
+        lo_s = str(int(min_len)) if min_len is not None else "0"
+        hi_s = str(int(max_len)) if max_len is not None else "?"
+        return _finish(
+            [f"{lo_s}..{hi_s} chars"], f"must be between {lo_s} and {hi_s} characters long"
+        )
     # No enum/range/items constraint, but still a plain type error: name the type.
     if type_phrase:
         return [], type_phrase

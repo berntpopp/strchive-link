@@ -22,7 +22,9 @@ get_locus(locus="HTT")
 ```
 search_loci(query="ataxia", limit=50)
 → results[] with total, truncated, next_offset; each row's matched_on is
-  disease_name, disease_tag (source tag only) or hpo_phenotype (ataxia among its HPO terms)
+  disease_name, disease_tag (source tag only) or hpo_phenotype (ataxia among its HPO terms);
+  an exact id/gene/abbreviation is id_or_gene, an abbreviation plus type number
+  (SCA -> SCA1, SCA2, ...) is id_prefix
 ```
 
 **Motif-dependent loci**

@@ -72,7 +72,8 @@ def register_locus_tools(mcp: FastMCP) -> None:
         tags={"str", "locus", "search"},
         description=(
             "Search the STRchive catalog of tandem-repeat (STR) disease loci. query matches, "
-            "in rank order: an exact locus id / gene symbol / disease abbreviation; a "
+            "in rank order: an exact locus id / gene symbol / disease abbreviation; an "
+            "abbreviation followed by a type number (SCA -> SCA1, SCA2, ...); a "
             "MONDO:/OMIM:/ORPHA: id; a repeat motif in either orientation (e.g. CAG, AAGGG); "
             "words in the disease name, then in source tags (e.g. 'ataxia'), then in the "
             "locus HPO phenotype labels. Each row's matched_on says which. Omit query to "

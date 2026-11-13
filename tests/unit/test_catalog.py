@@ -117,6 +117,13 @@ def test_search_by_gene_ranks_exact_first(catalog: Catalog) -> None:
     assert catalog.search("HTT")[0].id == "HD_HTT"
 
 
+def test_search_abbreviation_prefix_ranks_before_substring(catalog: Catalog) -> None:
+    hits = catalog.search_scored("DM")
+    assert {loc.id for loc, _ in hits[:2]} == {"DM1_DMPK", "DM2_CNBP"}
+    assert hits[0][1] == "id_prefix"
+    assert "OPDM5_ABCD3" in [loc.id for loc, _ in hits[2:]]
+
+
 def test_search_by_mondo_and_omim(catalog: Catalog) -> None:
     assert [loc.id for loc in catalog.search("MONDO:0007739")] == ["HD_HTT"]
     assert [loc.id for loc in catalog.search("OMIM:143100")] == ["HD_HTT"]

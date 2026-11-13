@@ -227,7 +227,7 @@ class Catalog:
         return [locus for locus, _ in self.search_scored(query)]
 
     def search_scored(self, query: str | None) -> list[tuple[Locus, str]]:
-        """Rank loci by gene/id, MONDO/OMIM/Orphanet id, motif, disease text, HPO phenotype.
+        """Rank loci by gene/id, its prefix, MONDO/OMIM/Orphanet id, motif, disease text, HPO.
 
         Each hit carries the basis it matched on, so a phenotype-only hit is never
         mistaken for a locus whose disease is named after the query.
@@ -239,11 +239,15 @@ class Catalog:
         id_match = _ID_QUERY.match(text)
         motif = text.upper() if _MOTIF_QUERY.match(text.upper()) else None
         tokens = folded.split()
+        # "DM" -> DM1/DM2, "SCA" -> SCA1..: an abbreviation then a non-letter (type number).
+        prefix = re.compile(rf"^{re.escape(folded)}[^a-z]")
         scored: list[tuple[int, Locus, str]] = []
         for locus in self.loci:
             exact = {_fold(locus.id), _fold(locus.gene), *map(_fold, locus.disease_codes)}
             if folded in exact:
                 scored.append((100, locus, "id_or_gene"))
+            elif any(prefix.match(key) for key in exact):
+                scored.append((70, locus, "id_prefix"))
             elif id_match is not None and _id_matches(locus, *id_match.groups()):
                 scored.append((90, locus, "external_id"))
             elif motif is not None and motif in locus.all_motifs():
