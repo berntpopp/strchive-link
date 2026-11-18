@@ -6,6 +6,14 @@ All notable changes to strchive-link are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-18
+
+### Changed
+
+- Upgrade FastMCP 3.4 → 4.2.2 and MCP SDK 1.x → 2.x; supports the 2026-07-28 sessionless protocol era alongside the legacy handshake.
+- Not-found reflection guard: the protocol backstop is ported to the SDK v2 request-handler registry (`get_request_handler`/`add_request_handler`). A malformed or unknown resource URI now reaches the handler (SDK v2 no longer rejects it at deserialization) and is answered with the same fixed, input-free message as an `INVALID_PARAMS` JSON-RPC error.
+- Tests: a modern-era `server/discover` → `tools/list` → `tools/call` HTTP test, including the unknown-tool fence; the log-cleanliness probes also cover the SDK v2 `mcp.server.runner` and `mcp.shared.jsonrpc_dispatcher` loggers.
+
 ## [0.1.3] - 2026-11-13
 
 ### Changed

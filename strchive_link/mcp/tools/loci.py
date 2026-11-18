@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Any
 
+from fastmcp.tools import ToolResult
 from pydantic import Field
 
 from strchive_link.catalog import PINNED_COMMIT, compare_length
@@ -105,7 +106,7 @@ def register_locus_tools(mcp: FastMCP) -> None:
                 "No source prose at any mode; use get_locus for notes."
             ),
         ] = "compact",
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | ToolResult:
         async def call() -> dict[str, Any]:
             hits = (await get_catalog()).search_scored(query)
             page = [
@@ -148,7 +149,9 @@ def register_locus_tools(mcp: FastMCP) -> None:
             "Signature: get_locus(locus, response_mode=)."
         ),
     )
-    async def get_locus(locus: LocusKey, response_mode: ResponseMode = "compact") -> dict[str, Any]:
+    async def get_locus(
+        locus: LocusKey, response_mode: ResponseMode = "compact"
+    ) -> dict[str, Any] | ToolResult:
         async def call() -> dict[str, Any]:
             record = (await get_catalog()).get(locus)
             payload = {"result": project_locus(record, response_mode)}
@@ -187,7 +190,7 @@ def register_locus_tools(mcp: FastMCP) -> None:
                 examples=[38, 45],
             ),
         ],
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | ToolResult:
         async def call() -> dict[str, Any]:
             record = (await get_catalog()).get(locus)
             result = compare_length(record, repeat_count)
