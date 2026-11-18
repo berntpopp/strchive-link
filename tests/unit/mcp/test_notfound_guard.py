@@ -1,6 +1,6 @@
 """FastMCP-core not-found reflection guard, driven through the REAL MCP surface.
 
-FastMCP core (pinned ``>=3.4.4,<4.0.0``) reflects the caller's OWN requested tool
+FastMCP core (pinned ``>=4.2.2,<5.0.0``) reflects the caller's OWN requested tool
 name / resource URI / prompt name back to the caller (and to logs) BEFORE any
 backend middleware runs. On this stack the probe (pristine ``origin/main``) found:
 
@@ -38,7 +38,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ResourceError
 from mcp.shared.memory import create_client_server_memory_streams
 from mcp.shared.message import SessionMessage
-from mcp.types import INVALID_PARAMS, JSONRPCMessage, JSONRPCRequest
+from mcp.types import INVALID_PARAMS, JSONRPCRequest
 
 from strchive_link.mcp.facade import create_strchive_mcp
 from strchive_link.safe_fields import FORBIDDEN_CODEPOINTS
@@ -119,6 +119,8 @@ _LOG_TARGETS = (
     "fastmcp.server.server",
     "fastmcp.server.mixins.mcp_operations",
     "mcp.server.lowlevel.server",
+    "mcp.server.runner",  # SDK v2 request runner
+    "mcp.shared.jsonrpc_dispatcher",  # SDK v2 exception-to-wire boundary
 )
 
 
@@ -269,24 +271,35 @@ async def _raw_read_resource_error(uri: str) -> tuple[mcp_types.JSONRPCError | N
                         server_read,
                         server_write,
                         init_options,
-                        stateless=True,  # start Initialized: skip the handshake
                         raise_exceptions=False,
                     )
 
                 task_group.start_soon(_run)
+                # SDK v2 dropped ``stateless``: complete the legacy handshake first.
+                init = JSONRPCRequest(
+                    jsonrpc="2.0",
+                    id=0,
+                    method="initialize",
+                    params={
+                        "protocolVersion": "2025-06-18",
+                        "capabilities": {},
+                        "clientInfo": {"name": "probe", "version": "0"},
+                    },
+                )
+                await client_write.send(SessionMessage(message=init))
                 request = JSONRPCRequest(
                     jsonrpc="2.0",
                     id=1,
                     method="resources/read",
                     params={"uri": uri},
                 )
-                await client_write.send(SessionMessage(message=JSONRPCMessage(request)))
+                await client_write.send(SessionMessage(message=request))
                 with anyio.fail_after(5):
                     for _ in range(8):
                         message = await client_read.receive()
                         if isinstance(message, Exception):
                             raise message
-                        candidate = message.message.root
+                        candidate = message.message  # SDK v2: plain union
                         if isinstance(candidate, mcp_types.JSONRPCError):
                             root = candidate
                             break
@@ -313,11 +326,12 @@ async def test_malformed_uri_real_request_frame_and_logs_are_clean() -> None:
 @pytest.mark.asyncio
 async def test_codepoint_uri_real_request_frame_and_logs_are_clean() -> None:
     root, logs = await _raw_read_resource_error(HOSTILE_UNKNOWN_URI_CP)
-    # Caller frame is fixed by mcp core; the residual is the ROOT-logger record.
-    if root is not None:
-        _assert_clean_text(root.error.message, where="jsonrpc-error")
-        if isinstance(root.error.data, str):
-            _assert_clean_text(root.error.data, where="jsonrpc-error-data")
+    # SDK v2 hands the URI to the handler; the Layer-3 backstop answers it.
+    assert root is not None, "expected a JSON-RPC error response"
+    assert root.error.code == INVALID_PARAMS
+    _assert_clean_text(root.error.message, where="jsonrpc-error")
+    if isinstance(root.error.data, str):
+        _assert_clean_text(root.error.data, where="jsonrpc-error-data")
     assert logs.records
     _assert_logs_clean(logs)
 
