@@ -6,6 +6,15 @@ All notable changes to strchive-link are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-18
+
+### Security
+
+- SDK 2 echoed an unknown JSON-RPC method name verbatim in the METHOD_NOT_FOUND error
+  `data` (both protocol eras); a low-level middleware now strips it (fixed
+  `-32601 Method not found`), and the log scrub covers the SDK 2 runner/dispatcher lines
+  (`mcp.server.runner`) that echo the method.
+
 ## [0.2.0] - 2026-11-18
 
 ### Changed
