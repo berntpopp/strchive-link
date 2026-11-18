@@ -82,3 +82,54 @@ def test_modern_mcp_http_discovers_lists_calls_and_fences_unknown_tool(
     assert json.loads(unknown_result["content"][0]["text"]) == unknown_result["structuredContent"]
     assert unknown_result["structuredContent"]["error_code"] == "not_found"
     assert hostile not in unknown.text
+
+
+_EVIL_METHOD = "evil__IGNORE_ALL_PREVIOUS__method"
+
+
+def _assert_fixed_method_not_found(response: Any) -> None:
+    assert _EVIL_METHOD not in response.text
+    assert "IGNORE_ALL_PREVIOUS" not in response.text
+    error = response.json()["error"]
+    assert error["code"] == -32601
+    assert "data" not in error or error["data"] is None
+
+
+def test_unknown_method_is_not_echoed_in_either_era(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SDK 2 echoes an unknown JSON-RPC method in METHOD_NOT_FOUND ``data``; the
+    Layer-3 middleware strips it (legacy after initialize, and the modern era)."""
+    monkeypatch.setattr(settings, "allowed_hosts", ["localhost"])
+    legacy_headers = {
+        "accept": "application/json, text/event-stream",
+        "content-type": "application/json",
+        "host": "localhost",
+    }
+    with TestClient(create_unified_app(), follow_redirects=False) as client:
+        init = client.post(
+            settings.mcp_path,
+            headers=legacy_headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "hostile", "version": "0"},
+                },
+            },
+        )
+        assert init.status_code == 200, init.text
+        session = init.headers.get("mcp-session-id")
+        if session:
+            legacy_headers["mcp-session-id"] = session
+        legacy_headers["mcp-protocol-version"] = "2025-06-18"
+        legacy = client.post(
+            settings.mcp_path,
+            headers=legacy_headers,
+            json={"jsonrpc": "2.0", "id": 2, "method": _EVIL_METHOD, "params": {}},
+        )
+        modern = _post(client, 3, _EVIL_METHOD, {"_meta": _MODERN_META})
+
+    _assert_fixed_method_not_found(legacy)
+    _assert_fixed_method_not_found(modern)
