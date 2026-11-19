@@ -34,6 +34,7 @@ from strchive_link.exceptions import (
     DataUnavailableError,
     NotFoundError,
 )
+from strchive_link.mcp.envelope import _PUBLIC_MESSAGE
 
 # Injection prose + zero-width joiner (U+200D) + BOM (U+FEFF) + RTL override
 # (U+202E) + NUL interleaved -- what a caller-influenced value carries into an
@@ -110,9 +111,7 @@ async def test_envelope_message_is_fixed_no_prose_no_codepoints(facade_factory: 
     for payload in _mirrors(result):
         assert payload["success"] is False
         assert payload["error_code"] == "not_found"
-        assert (
-            payload["message"] == "No STRchive locus matches. Use search_loci to find the locus id."
-        )
+        assert payload["message"] == _PUBLIC_MESSAGE["not_found"]  # fixed server string
         _assert_no_prose_anywhere(payload)
         _assert_no_codepoints_anywhere(payload)
 

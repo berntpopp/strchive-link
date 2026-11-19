@@ -50,9 +50,15 @@ class InvalidInputError(StrchiveError):
 class NotFoundError(StrchiveError):
     """A lookup matched no STRchive locus."""
 
-    def __init__(self, message: str = "No matching STRchive locus found.") -> None:
-        """Initialise with a 404 status code."""
+    def __init__(
+        self,
+        message: str = "No matching STRchive locus found.",
+        *,
+        candidates: list[dict[str, str]] | None = None,
+    ) -> None:
+        """Initialise with a 404 status code and optional weak (search-ranked) candidates."""
         super().__init__(message, status_code=404)
+        self.candidates = candidates or []
 
 
 class AmbiguousQueryError(StrchiveError):

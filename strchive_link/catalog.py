@@ -234,7 +234,13 @@ class Catalog:
                 "Several STRchive loci match; pick one locus id.",
                 candidates=[{"locus_id": loc.id, "gene": loc.gene} for loc in matches],
             )
-        raise NotFoundError()
+        # Not a key: offer the free-text search's top hits as weak candidates.
+        hits = self.search_scored(key)[:3]
+        raise NotFoundError(
+            candidates=[
+                {"locus_id": loc.id, "gene": loc.gene, "matched_on": why} for loc, why in hits
+            ]
+        )
 
     def search(self, query: str | None) -> list[Locus]:
         """Ranked loci for a query (see ``search_scored``)."""
