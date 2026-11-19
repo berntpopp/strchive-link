@@ -6,6 +6,27 @@ All notable changes to strchive-link are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-19
+
+### Added
+
+- `get_locus` / `compare_repeat_length` `not_found` for a key that is not a locus id, gene
+  or abbreviation (e.g. a disease name) now carries up to three `candidates` from the
+  `search_loci` ranking, each flagged `match: "weak"` with its `matched_on` basis, and
+  `next_commands` to open them; `search_loci` stays the last step. A miss with no hit
+  points at `search_loci` (it pointed at `get_server_capabilities`), and the message names
+  `mondo_resolve_disease` for diseases STRchive does not list.
+
+### Changed
+
+- `search_loci` description leads with what it returns (Tool-Schema Documentation v1.1,
+  rule D1).
+
+### Tests
+
+- Guard: every `next_commands` step names a real tool and real arguments
+  (`tests/unit/test_hint_targets.py`); every field a tool description names is returned.
+
 ## [0.2.1] - 2026-11-18
 
 ### Security

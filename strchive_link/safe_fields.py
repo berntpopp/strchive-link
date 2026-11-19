@@ -35,6 +35,19 @@ _LOCUS_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/+?-]{0,63}$")
 _SYMBOL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
 _ALLOWED_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/@+-]{0,63}$")
 _ALLOWED_RANGE_RE = re.compile(r"^\d+\.\.\d+( items| chars)?$")
+# Closed set of ``Catalog.search_scored`` match bases.
+MATCH_BASES = frozenset(
+    {
+        "all",
+        "id_or_gene",
+        "id_prefix",
+        "external_id",
+        "motif",
+        "disease_name",
+        "disease_tag",
+        "hpo_phenotype",
+    }
+)
 
 
 def strip_forbidden(text: str) -> str:
@@ -73,5 +86,7 @@ def safe_candidates(candidates: Any) -> list[dict[str, str]]:
         gene = item.get("gene")
         if isinstance(gene, str) and _SYMBOL_RE.match(gene):
             entry["gene"] = gene
+        if item.get("matched_on") in MATCH_BASES:
+            entry["matched_on"] = item["matched_on"]
         out.append(entry)
     return out

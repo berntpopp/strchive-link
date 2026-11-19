@@ -209,3 +209,51 @@ async def test_documented_prefix_example_is_true(facade: Any, structured: Any) -
     env = await _call(facade, structured, "get_locus", {"locus": "FRA"})
     assert env["error_code"] == "ambiguous_query"
     assert {"FRA2A_AFF3", "FRA7A_ZNF713"} <= {c["locus_id"] for c in env["candidates"]}
+
+
+async def test_descriptions_name_only_returned_fields(facade: Any, structured: Any) -> None:
+    """Contract truth: every snake_case field a description names appears in a response."""
+    import re
+
+    samples = {
+        "search_loci": {"query": "ataxia", "limit": 1},
+        "get_locus": {"locus": "ABCD3"},  # no intermediate range -> not_stated_by_source
+        "compare_repeat_length": {"locus": "RFC1", "repeat_count": 400},
+    }
+    tools = {t.name: t for t in await facade.list_tools()}
+    for name, args in samples.items():
+        prose = (tools[name].description or "").split("Signature:")[0]
+        named = set(re.findall(r"\b[a-z]+(?:_[a-z0-9]+)+\b|\b(?:results|total|truncated)\b", prose))
+        named -= set(tools[name].parameters.get("properties", {}))
+        assert named, name
+        body = json.dumps(await _call(facade, structured, name, args))
+        missing = {f for f in named if f'"{f}"' not in body}
+        assert not missing, f"{name} description names unreturned {missing}"
+
+
+async def test_disease_name_miss_offers_weak_candidates_and_search(
+    facade: Any, structured: Any
+) -> None:
+    """A free-text miss is an honest not_found with weak, in-catalog candidates to open."""
+    from fastmcp import Client
+
+    async with Client(facade) as client:
+        hit = structured(
+            await client.call_tool(
+                "get_locus", {"locus": "Huntington disease"}, raise_on_error=False
+            )
+        )
+        none = structured(
+            await client.call_tool("get_locus", {"locus": "zzzz qqqq"}, raise_on_error=False)
+        )
+    assert hit["error_code"] == "not_found"
+    assert [c["locus_id"] for c in hit["candidates"]] == ["HD_HTT", "HDL2_JPH3"]
+    assert {(c["match"], c["matched_on"]) for c in hit["candidates"]} == {("weak", "disease_name")}
+    assert hit["_meta"]["next_commands"][0] == {
+        "tool": "get_locus",
+        "arguments": {"locus": "HD_HTT"},
+    }
+    assert hit["_meta"]["next_commands"][-1] == {"tool": "search_loci", "arguments": {}}
+    assert "candidates" not in none
+    assert none["_meta"]["next_commands"] == [{"tool": "search_loci", "arguments": {}}]
+    assert "mondo_resolve_disease" in none["message"]

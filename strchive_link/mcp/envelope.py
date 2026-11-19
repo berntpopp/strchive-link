@@ -93,7 +93,9 @@ def _request_id() -> str:
 # STRchive snapshot being unfetchable/unverifiable maps onto upstream_unavailable
 # (retryable: the next call re-attempts the load), not a bespoke code.
 _PUBLIC_MESSAGE: dict[str, str] = {
-    "not_found": "No STRchive locus matches. Use search_loci to find the locus id.",
+    "not_found": "No STRchive locus matches. Use search_loci to find the locus id; for a "
+    "disease STRchive does not name, resolve it with mondo_resolve_disease and pass "
+    "the MONDO id to search_loci.",
     "ambiguous_query": "The request matched several STRchive loci; pick one from candidates.",
     "invalid_input": "The request was invalid. See field / allowed_values / hint.",
     "rate_limited": "Rate limit hit. Retry shortly.",
@@ -170,10 +172,15 @@ def _error_envelope(exc: BaseException, context: McpErrorContext) -> dict[str, A
             suggestion = safe_allowed_values(exc.did_you_mean)
             if suggestion:
                 envelope["did_you_mean"] = suggestion
-    if isinstance(exc, AmbiguousQueryError) and exc.candidates:
+    if isinstance(exc, AmbiguousQueryError | NotFoundError) and exc.candidates:
         safe_cands = safe_candidates(exc.candidates)  # validated ids only; name dropped
+        if isinstance(exc, NotFoundError):
+            for cand in safe_cands:
+                cand["match"] = "weak"  # a search guess, not a resolution
         envelope["candidates"] = safe_cands
         chain = [cmd("get_locus", locus=c["locus_id"]) for c in safe_cands[:3]]
+        if isinstance(exc, NotFoundError):  # the full search stays one step away
+            chain += default_error_next_commands(context.tool_name, error_code, context.arguments)
         envelope["_meta"]["next_commands"] = chain or [cmd("get_server_capabilities")]
     elif context.fallback is not None:
         envelope["_meta"]["next_commands"] = [context.fallback]

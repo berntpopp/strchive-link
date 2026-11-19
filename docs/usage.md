@@ -58,7 +58,9 @@ RFC1), the motif identity decides the category, not the length.
   `gene_strand`.
 - **`locus`** accepts a STRchive locus id (`HD_HTT`), a gene symbol (`HTT`) or a disease
   abbreviation (`SCA3`). A gene with several loci (ARX, HOXA13) returns `ambiguous_query`
-  with the locus ids to choose from.
+  with the locus ids to choose from. Anything else (e.g. a disease name) returns `not_found`
+  with up to three `candidates` from `search_loci`, each flagged `match: "weak"` with its
+  `matched_on` basis; check one before using it.
 
 ## response_mode
 

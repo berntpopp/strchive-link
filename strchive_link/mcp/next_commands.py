@@ -24,8 +24,8 @@ def default_error_next_commands(
         return [cmd("get_diagnostics")]
     if tool in ("get_locus", "compare_repeat_length") and error_code == "not_found":
         value = arguments.get("locus")
-        if is_locus_key(value):
-            return [cmd("search_loci", query=value)]
+        # Free text is never echoed into a step (see module docstring).
+        return [cmd("search_loci", query=value) if is_locus_key(value) else cmd("search_loci")]
     return [cmd("get_server_capabilities")]
 
 

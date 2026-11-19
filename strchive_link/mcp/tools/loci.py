@@ -73,13 +73,15 @@ def register_locus_tools(mcp: FastMCP) -> None:
         output_schema=None,
         tags={"str", "locus", "search"},
         description=(
-            "Search the STRchive catalog of tandem-repeat (STR) disease loci. query matches, "
+            "Search the STRchive catalog of tandem-repeat (STR) disease loci; returns ranked "
+            "loci (locus_id, gene, disease, inheritance, evidence level, pathogenic motifs, "
+            "pathogenic_min) with total/truncated/next_offset. query matches, "
             "in rank order: an exact locus id / gene symbol / disease abbreviation; an "
             "abbreviation followed by a type number (FRA -> FRA2A, FRA7A, ...); a "
             "MONDO:/OMIM:/ORPHA: id; a repeat motif in either orientation (e.g. CAG, AAGGG); "
             "words in the disease name, then in source tags (e.g. 'ataxia'), then in the "
             "locus HPO phenotype labels. Each row's matched_on says which. Omit query to "
-            "list every locus. Returns results with total/truncated/next_offset. "
+            "list every locus. "
             "Signature: search_loci(query=, limit=, offset=, response_mode=)."
         ),
     )
