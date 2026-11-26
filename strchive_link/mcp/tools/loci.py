@@ -126,7 +126,12 @@ def register_locus_tools(mcp: FastMCP) -> None:
                     "truncated": more,
                     "next_offset": offset + len(page) if more else None,
                     "_meta": {
-                        "pagination": {"total_count": len(hits), "has_more": more},
+                        "pagination": {
+                            "total_count": len(hits),
+                            "has_more": more,
+                            "next_cursor": None,  # paging is by offset
+                            "next_offset": offset + len(page) if more else None,
+                        },
                         "next_commands": after_search(page),
                     },
                 },

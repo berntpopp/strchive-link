@@ -6,6 +6,13 @@ All notable changes to strchive-link are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-26
+
+### Fixed
+
+- `search_loci` `_meta.pagination` also carries `next_cursor` (always `null`; paging is by
+  offset) and `next_offset`, as Response-Envelope Standard v1 §5 asks.
+
 ## [0.4.0] - 2026-11-26
 
 ### Added
