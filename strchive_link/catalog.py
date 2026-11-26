@@ -13,6 +13,7 @@ import hashlib
 import json
 import re
 import unicodedata
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 import httpx
@@ -201,10 +202,12 @@ _MOTIF_QUERY = re.compile(r"^[ACGTN]{2,100}$")
 class Catalog:
     """An immutable, indexed STRchive snapshot."""
 
-    def __init__(self, loci: list[Locus], sha256: str) -> None:
+    def __init__(self, loci: list[Locus], sha256: str, retrieved_at: datetime) -> None:
         """Index the validated loci by id, disease id, and gene (all case-folded)."""
         self.loci: tuple[Locus, ...] = tuple(loci)
         self.sha256 = sha256
+        # When the snapshot was obtained from the upstream (Response-Envelope v1.2).
+        self.retrieved_at = retrieved_at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         self._by_id: dict[str, Locus] = {}
         self._by_alias: dict[str, list[Locus]] = {}
         for locus in self.loci:
@@ -292,8 +295,13 @@ def _id_matches(locus: Locus, prefix: str, number: str) -> bool:
     return number in locus.orphanet
 
 
-def parse_catalog(raw: bytes, expected_sha256: str) -> Catalog:
-    """Verify the digest, then validate every record. Any failure fails closed."""
+def parse_catalog(
+    raw: bytes, expected_sha256: str, retrieved_at: datetime | None = None
+) -> Catalog:
+    """Verify the digest, then validate every record. Any failure fails closed.
+
+    ``retrieved_at`` is when ``raw`` was obtained from the upstream (default: now).
+    """
     digest = hashlib.sha256(raw).hexdigest()
     if digest != expected_sha256:
         raise DataUnavailableError("STRchive snapshot digest does not match the pin.")
@@ -303,13 +311,14 @@ def parse_catalog(raw: bytes, expected_sha256: str) -> Catalog:
         raise DataUnavailableError("STRchive snapshot failed schema validation.") from exc
     if not loci:
         raise DataUnavailableError("STRchive snapshot is empty.")
-    return Catalog(loci, digest)
+    return Catalog(loci, digest, retrieved_at or datetime.now(UTC))
 
 
 async def fetch_catalog(
     url: str, expected_sha256: str, *, timeout: float, max_bytes: int
 ) -> Catalog:
     """Download the pinned file (size-capped, no redirects) and parse it."""
+    fetched_at = datetime.now(UTC)
     try:
         async with (
             httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client,
@@ -323,7 +332,7 @@ async def fetch_catalog(
                     raise DataUnavailableError("STRchive snapshot exceeds the size cap.")
     except httpx.HTTPError as exc:
         raise DataUnavailableError("STRchive snapshot download failed.") from exc
-    return parse_catalog(bytes(body), expected_sha256)
+    return parse_catalog(bytes(body), expected_sha256, fetched_at)
 
 
 def range_block(locus: Locus, category: str) -> dict[str, Any]:

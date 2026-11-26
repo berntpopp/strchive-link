@@ -139,7 +139,9 @@ def _recovery_action(error_code: str) -> str:
     return "switch_tool"
 
 
-def _error_envelope(exc: BaseException, context: McpErrorContext) -> dict[str, Any]:
+def _error_envelope(
+    exc: BaseException, context: McpErrorContext, elapsed_ms: float = 0.0
+) -> dict[str, Any]:
     error_code, message = _classify(exc)
     envelope: dict[str, Any] = {
         "success": False,
@@ -151,6 +153,7 @@ def _error_envelope(exc: BaseException, context: McpErrorContext) -> dict[str, A
         "recovery_action": _recovery_action(error_code),
         "_meta": {
             "tool": context.tool_name,
+            "elapsed_ms": elapsed_ms,
             "request_id": _request_id(),
             "unsafe_for_clinical_use": _UNSAFE_FOR_CLINICAL_USE,
         },
@@ -243,6 +246,7 @@ def build_arg_error_envelope(
             "hint": signature,
             "_meta": {
                 "tool": tool_name,
+                "elapsed_ms": 0.0,  # refused at argument binding, before the tool ran
                 "request_id": _request_id(),
                 "next_commands": [cmd("get_server_capabilities")],
                 "unsafe_for_clinical_use": _UNSAFE_FOR_CLINICAL_USE,
@@ -290,7 +294,7 @@ async def run_mcp_tool(
                 return _error_tool_result(result)
         return result
     except Exception as exc:  # broad catch is the error-boundary contract
-        envelope = _error_envelope(exc, ctx)
+        envelope = _error_envelope(exc, ctx, round((time.perf_counter() - started) * 1000, 1))
         logger.warning(
             "mcp_tool_error tool=%s code=%s exc=%s",
             tool_name,

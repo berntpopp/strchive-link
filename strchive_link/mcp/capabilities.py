@@ -80,6 +80,7 @@ def build_capabilities() -> dict[str, Any]:
             "elapsed_ms",
             "source",
             "data_version",
+            "retrieved_at",
             "next_commands",
             "unsafe_for_clinical_use",
         ],
