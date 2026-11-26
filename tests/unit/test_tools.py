@@ -97,6 +97,8 @@ async def test_search_loci_ataxia_is_bounded_and_honest(facade: Any, structured:
     assert env["total"] > 2
     assert env["truncated"] is True
     assert env["_meta"]["pagination"]["has_more"] is True
+    assert env["_meta"]["pagination"]["next_cursor"] is None
+    assert env["_meta"]["pagination"]["next_offset"] == env["next_offset"]
     assert env["next_offset"] == 2
 
 
