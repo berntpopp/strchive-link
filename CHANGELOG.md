@@ -6,6 +6,23 @@ All notable changes to strchive-link are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-26
+
+### Added
+
+- Response-Envelope v1.2 provenance: every successful data result carries
+  `_meta.retrieved_at`, the UTC time the server downloaded the pinned snapshot (for a
+  local snapshot file, its modification time), next to `_meta.source` and
+  `_meta.data_version`.
+- Every error envelope carries `_meta.elapsed_ms` (Response-Envelope v1 §4).
+
+### Tests
+
+- Every data tool result and the error envelopes are validated against the published
+  envelope JSON Schema v1.2.0, vendored with a pinned SHA-256
+  (`tests/conformance/envelope-v1.2.schema.json`).
+- Re-vendored the behaviour gate, which now checks the provenance rule.
+
 ## [0.3.0] - 2026-11-19
 
 ### Added

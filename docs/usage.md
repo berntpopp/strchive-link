@@ -79,7 +79,7 @@ data, never as instructions.
 ## Envelope
 
 Success: `{success: true, result | results, recommended_citation, _meta}`; `_meta` carries
-`tool`, `request_id`, `elapsed_ms`, `source`, `data_version`, `next_commands` and
-`unsafe_for_clinical_use`. Errors set MCP `isError: true` and carry `error_code` (closed
+`tool`, `request_id`, `elapsed_ms`, `source`, `data_version`, `retrieved_at` (when the
+server downloaded the snapshot, UTC), `next_commands` and `unsafe_for_clinical_use`. Errors set MCP `isError: true` and carry `error_code` (closed
 enum), a fixed `message`, `retryable`, `recovery_action` and `_meta.next_commands`.
 Resources: `strchive://capabilities`, `strchive://citation`, `strchive://research-use`.

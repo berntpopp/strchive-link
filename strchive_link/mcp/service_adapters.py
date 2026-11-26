@@ -8,6 +8,7 @@ commit + digest), so a successful load never needs refreshing.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 
 from strchive_link.catalog import Catalog, fetch_catalog, parse_catalog
 from strchive_link.config import settings
@@ -28,9 +29,13 @@ async def get_catalog() -> Catalog:
             if cfg.local_path is not None:
                 try:
                     raw = await asyncio.to_thread(cfg.local_path.read_bytes)
+                    # A local snapshot was downloaded when the file was written.
+                    mtime = cfg.local_path.stat().st_mtime
                 except OSError as exc:
                     raise DataUnavailableError("Local STRchive snapshot is unreadable.") from exc
-                _catalog = parse_catalog(raw, cfg.expected_sha256)
+                _catalog = parse_catalog(
+                    raw, cfg.expected_sha256, datetime.fromtimestamp(mtime, UTC)
+                )
             else:
                 _catalog = await fetch_catalog(
                     cfg.source_url,

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastmcp.tools import ToolResult
 from pydantic import Field
 
-from strchive_link.catalog import PINNED_COMMIT, compare_length
+from strchive_link.catalog import PINNED_COMMIT, Catalog, compare_length
 from strchive_link.constants import (
     MAX_SEARCH_LIMIT,
     RANGE_SEMANTICS,
@@ -53,12 +53,13 @@ COMPARE_INTERPRETATION = (
 )
 
 
-def _provenance(payload: dict[str, Any]) -> dict[str, Any]:
+def _provenance(payload: dict[str, Any], catalog: Catalog) -> dict[str, Any]:
     payload["recommended_citation"] = RECOMMENDED_CITATION
     payload["_meta"] = {
         **payload.get("_meta", {}),
         "source": SOURCE_NAME,
         "data_version": f"strchive@{PINNED_COMMIT[:12]}",
+        "retrieved_at": catalog.retrieved_at,
     }
     return payload
 
@@ -110,7 +111,8 @@ def register_locus_tools(mcp: FastMCP) -> None:
         ] = "compact",
     ) -> dict[str, Any] | ToolResult:
         async def call() -> dict[str, Any]:
-            hits = (await get_catalog()).search_scored(query)
+            catalog = await get_catalog()
+            hits = catalog.search_scored(query)
             page = [
                 project_row(loc, response_mode, why) for loc, why in hits[offset : offset + limit]
             ]
@@ -127,7 +129,8 @@ def register_locus_tools(mcp: FastMCP) -> None:
                         "pagination": {"total_count": len(hits), "has_more": more},
                         "next_commands": after_search(page),
                     },
-                }
+                },
+                catalog,
             )
 
         return await run_mcp_tool(
@@ -155,11 +158,12 @@ def register_locus_tools(mcp: FastMCP) -> None:
         locus: LocusKey, response_mode: ResponseMode = "compact"
     ) -> dict[str, Any] | ToolResult:
         async def call() -> dict[str, Any]:
-            record = (await get_catalog()).get(locus)
+            catalog = await get_catalog()
+            record = catalog.get(locus)
             payload = {"result": project_locus(record, response_mode)}
             payload["range_semantics"] = RANGE_SEMANTICS
             payload["_meta"] = {"next_commands": after_locus(record.id, record.gene, response_mode)}
-            return _provenance(payload)
+            return _provenance(payload, catalog)
 
         return await run_mcp_tool(
             "get_locus", call, context=McpErrorContext("get_locus", arguments={"locus": locus})
@@ -194,7 +198,8 @@ def register_locus_tools(mcp: FastMCP) -> None:
         ],
     ) -> dict[str, Any] | ToolResult:
         async def call() -> dict[str, Any]:
-            record = (await get_catalog()).get(locus)
+            catalog = await get_catalog()
+            record = catalog.get(locus)
             result = compare_length(record, repeat_count)
             result["unit"] = "repeat_units"
             result["interpretation"] = COMPARE_INTERPRETATION
@@ -203,7 +208,7 @@ def register_locus_tools(mcp: FastMCP) -> None:
                 result["source_range_notes"] = notes
             next_step = [cmd("get_locus", locus=record.id, response_mode="standard")]
             payload = {"result": result, "_meta": {"next_commands": next_step}}
-            return _provenance(payload)
+            return _provenance(payload, catalog)
 
         return await run_mcp_tool(
             "compare_repeat_length",

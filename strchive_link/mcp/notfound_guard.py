@@ -98,6 +98,7 @@ def unknown_tool_envelope() -> dict[str, Any]:
             "retryable": False,
             "recovery_action": "switch_tool",
             "_meta": {
+                "elapsed_ms": 0.0,  # refused before any tool ran
                 "request_id": _request_id(),
                 "next_commands": [cmd(_UNKNOWN_TOOL_FALLBACK)],
                 "unsafe_for_clinical_use": _UNSAFE_FOR_CLINICAL_USE,

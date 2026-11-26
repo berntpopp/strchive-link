@@ -130,6 +130,7 @@ def test_research_use_disclaimer_is_declared_once_in_capabilities() -> None:
         "elapsed_ms",
         "source",
         "data_version",
+        "retrieved_at",
         "next_commands",
         "unsafe_for_clinical_use",
     ]
